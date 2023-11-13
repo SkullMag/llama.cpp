@@ -12,7 +12,7 @@ FROM ${BASE_CUDA_DEV_CONTAINER} as build
 ARG CUDA_DOCKER_ARCH=all
 
 RUN apt-get update && \
-    apt-get install -y build-essential python3 python3-pip git
+    apt-get install -y build-essential python3 python3-pip git cmake
 
 COPY requirements.txt requirements.txt
 
@@ -28,6 +28,13 @@ ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable cuBLAS
 ENV LLAMA_CUBLAS=1
 
-RUN make
+WORKDIR /app/build
+RUN cmake .. -DLLAMA_CUBLAS=ON
+RUN cmake --build . --config Release
 
-ENTRYPOINT ["/app/.devops/tools.sh"]
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
+WORKDIR /app
+COPY --from=build /app/build/bin/server .
+
+ENTRYPOINT ["./server"]
+CMD ["-m", "/models/ggml-model-q4_k.gguf", "--mmproj", "/models/mmproj-model-f16.gguf", "-ngl", "200000", "--port", "5000"]
